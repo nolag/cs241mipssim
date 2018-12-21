@@ -56,7 +56,18 @@ func TestReadOneByteReturnsZeroForRemainingWordPartForStdin(t *testing.T) {
 	}
 }
 
-// TODO test raw read from location and crossing boundary
+func TestReadOneByteWorksForStdout(t *testing.T) {
+	anyVal := byte(10)
+	slice := memory.NewSlice(StdoutWrite + 1)
+	slice.WriteOneByte(anyVal, StdoutWrite)
+	mem := MemoryMappedIO{BackingMemory: slice}
+
+	actual, err := mem.ReadOneByte(StdoutWrite)
+
+	assert.Equal(t, anyVal, actual, "Wrong value returned")
+	assert.NoError(t, err, "Memory must not return an error when reading stdin")
+}
+
 func TestReadRawReadsFromStdin(t *testing.T) {
 	anyVal := byte(10)
 	reader := fakeReadable{NextVal: anyVal}
@@ -109,6 +120,26 @@ func TestReadRawReturnsAccessErrorIfCrossingBoundaryForMemoryRead(t *testing.T) 
 	assert.Equal(t, &expected2, err2)
 	assert.Equal(t, &expected3, err3)
 }
+
+func TestReadRawReturnsFalseForBackingReadFromStdout(t *testing.T) {
+	anyVal := byte(10)
+	slice := memory.NewSlice(StdoutWrite + 3)
+	slice.WriteOneByte(anyVal, StdoutWrite)
+	mem := MemoryMappedIO{BackingMemory: slice}
+
+	actual, backed, err := mem.ReadRaw(StdoutWrite-2, 5)
+
+	assert.ElementsMatch(t, []byte{0, 0, anyVal, 0, 0}, actual, "Read must read from memory")
+	assert.NoError(t, err, "Memory must not return an error when crossing stdin boundary")
+	assert.False(t, backed, "Memory from IO is not backed")
+	prior := actual[0]
+	actual[0] = 100
+	afterWrite, _ := mem.ReadOneByte(StdoutWrite - 2)
+	assert.Equal(t, prior, afterWrite, "Non backing memory must not change the value when written to")
+}
+
+// TODO maybe I want to force word alignment on multi-byte reads, it will simply the logic a lot.
+// maybe I'll also enforce reads on 4 bytes, since the machine doesn't allow otherwise.
 
 // TODO test single byte writes
 // TODO test raw writes from location and crossing boundary
